@@ -1,0 +1,5 @@
+selenium
+Pillow
+anticaptchaofficial
+beautifulsoup4
+pytesseract

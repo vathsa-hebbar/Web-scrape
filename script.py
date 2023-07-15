@@ -44,7 +44,7 @@ def solve_captcha(captcha_url):
     # Solve the captcha with retry mechanism
     solver = imagecaptcha()
     solver.set_verbose(1)
-    solver.set_key("0db318322bf75f1455409a012c44a8c9")
+    solver.set_key("YOUR API KEY") 
 
     max_retries = 3  # Set the maximum number of retries
     retry_count = 0

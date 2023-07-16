@@ -9,7 +9,8 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import StaleElementReferenceException
+from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException
+import datetime
 from PIL import Image
 from anticaptchaofficial.imagecaptcha import imagecaptcha
 
@@ -44,7 +45,7 @@ def solve_captcha(captcha_url):
     # Solve the captcha with retry mechanism
     solver = imagecaptcha()
     solver.set_verbose(1)
-    solver.set_key("YOUR API KEY") 
+    solver.set_key("0db318322bf75f1455409a012c44a8c9")
 
     max_retries = 3  # Set the maximum number of retries
     retry_count = 0
@@ -87,7 +88,7 @@ def get_tracking_data(consignment_number):
     driver.get('https://www.indiapost.gov.in/_layouts/15/DOP.Portal.Tracking/TrackConsignment.aspx')
 
     # Find the input field and fill it with the consignment number
-    input_field = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_txtOrignlPgTranNo')))
+    input_field = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_txtOrignlPgTranNo')))
     input_field.clear()
     input_field.send_keys(consignment_number)
 
@@ -118,23 +119,34 @@ def get_tracking_data(consignment_number):
     # Wait for 10 seconds to allow the data to load
     time.sleep(3)
 
-    # Check if error element is present
-    # error_element_present = False
-    # try:
-    #     error_element = driver.find_element(By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_ucDisplayBlock_DisplayError')
-    #     error_element_present = True
-    # except NoSuchElementException:
-    #     pass
 
-    #  # If error element is present, print the error and exit
-    # if error_element_present:
-    #     print(f"server down")
-    #     return None
+    # Wait for the response, timeout after 30 seconds
+    try:
+        WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_divTrckMailArticleOER')))
+    except TimeoutException:
+        print("Server error. Process timed out.")
+        driver.quit()
+        return None
 
+    # Check if the captcha message element is present
+    try:
+        captcha_message = driver.find_element(By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_ucCaptcha1_lblCaptchamessage')
+        captcha_message_style = captcha_message.get_attribute('style')
+
+        # If the captcha message style is 'block', refresh the captcha
+        if captcha_message_style == 'display: block;':
+            print("Invalid captcha. Refreshing...")
+            refresh_captcha()
+            return None
+
+    except NoSuchElementException:
+        pass
+
+        
     # Loop until the target element with ID 'ctl00_PlaceHolderMain_ucNewLegacyControl_divTrckMailArticleOER' is found
     while True:
         try:
-            element1 = WebDriverWait(driver, 3).until(EC.presence_of_element_located((By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_divTrckMailArticleOER'))).get_attribute('innerHTML')
+            element1 = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, 'ctl00_PlaceHolderMain_ucNewLegacyControl_divTrckMailArticleOER'))).get_attribute('innerHTML')
             break
         except:
             # If the target element is not found, refresh the captcha and try again
@@ -197,11 +209,24 @@ for consignment_number in consignment_numbers:
     time.sleep(2)
 
 # Save all tracking data to a JSON file
-with open('track_data.json', 'w') as file:
-    json.dump(all_tracking_data, file, indent=4)
+current_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+file_name = f"track_data_{current_datetime}.json"
+folder_name = "track_data"  # Folder name where you want to save the file
+
+# Create the folder if it doesn't exist
+if not os.path.exists(folder_name):
+    os.makedirs(folder_name)
+
+# Combine the folder name and file name to get the full file path
+file_path = os.path.join(os.getcwd(), folder_name, file_name)
+
+# Copy the track_data.json file from the container to the host machine using os.system
+os.system(f"docker cp web-scrape-web-scrape-app-1:/app/{file_name} ./track_data/")
+
 
 # Print the successful and failed consignment numbers
 print("Successful Consignment Numbers:")
 print(list(all_tracking_data.keys()))
 print("Failed Consignment Numbers:")
 print(failed_numbers)
+
